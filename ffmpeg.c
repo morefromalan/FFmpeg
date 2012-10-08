@@ -100,12 +100,7 @@
 
 #define SICKO 1
 #if SICKO
-#include <sys/types.h>
-#include <stdbool.h>
-#include <fcntl.h>
-#include <curl/curl.h>
-
-#include "pegleg.h"
+#include "../../pegleg/pegleg.h"
 #endif
 
 
@@ -118,19 +113,6 @@
 const char program_name[] = "ffmpeg";
 const int program_birth_year = 2000;
 
-
-#if SICKO
-
-typedef int SickoResult;
-
-#define SICKO_RESULT_FAIL -1
-#define SICKO_RESULT_STUB -2
-#define SICKO_RESULT_SUCCESS 1
-#define HTTP_SUCCESS 200
-
-#define TRACE printf
-
-#endif
 
 
 
@@ -482,14 +464,6 @@ typedef struct OptionsContext {
     int        nb_filters;
 } OptionsContext;
 
-#if SICKO
-bool testResult( SickoResult sr );
-int sicko_getURL( const char *url, const char *dest );
-int sicko_extractAudio( const char *srcVideo, const char *destAudio );
-int ffmain(int argc, char **argv);
-int ssmain(void);
-void printArgs( int argc, char **argv );
-#endif
 
 
 static void do_video_stats(AVFormatContext *os, OutputStream *ost, int frame_size);
@@ -6139,12 +6113,18 @@ static const OptionDef options[] = {
     { NULL, },
 };
 
-int ffmain(int argc, char **argv)
+#if SICKO
+#include "../../pegleg/pegleg.c"
+int main(int argc, char **argv) {
+	sicko_main();
+}
+#else
+int main(int argc, char **argv)
 {
     OptionsContext o = { 0 };
     int64_t ti;
 	
-	printArgs( argc, argv);
+	//printArgs( argc, argv);
     
     reset_options(&o, 0);
 
@@ -6204,135 +6184,6 @@ int ffmain(int argc, char **argv)
     exit_program(0);
     return 0;	
 }
+#endif
 
-/////////////////////////////
-/////////////////////////////
-/////////////////////////////
-
-
-
-bool testResult( SickoResult sr ){
-	return sr > 0;
-}
-
-int sicko_getURL( const char *url, const char *dest ) {
-
-  	FILE *fp;
-	SickoResult sr = SICKO_RESULT_FAIL;
-	CURL *curl;
-	CURLcode curlRes;
-	long httpRes;
-
-  	fp = fopen(dest, "w");
-  	if ( fp ) {
-  		curl = curl_easy_init();	
-  		curl_easy_setopt(curl, CURLOPT_URL, url); // URL to download
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA,  fp); // file handler to write
-  		
-  		curlRes = curl_easy_perform(curl);
-  		
-  		if ( curlRes == CURLE_OK ) {
-  			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpRes);
-  		
-  			if ( httpRes == HTTP_SUCCESS ) { 
-  				sr = SICKO_RESULT_SUCCESS;
-  			}
-  		}
-  		curl_easy_cleanup(curl);	
-  		fclose(fp);
-  	}
-  
-  	return sr;
-}
-
-void printArgs( int argc, char **argv ) {
-
-	int i;
-
-	printf( "argc: %d", argc );
-	for ( i = 0; i < argc; i++ ) {
-		printf( "argv[%d]: %s", i, argv[i] );	
-	}
-
-
-}
-
-int sicko_extractAudio( const char *srcVideo, const char *destAudio ) {
-	SickoResult sr = SICKO_RESULT_FAIL;
-	//ffmpeg -i test1.mp4 -vn -acodec pcm_s16le -ar 44100 -ac 2 test1.wav
-	//ffmpeg -i srcVideo -vn -acodec pcm_s16le -ar 44100 -ac 2 destAudio
-		
-	const char *args[] = {"ffmpeg", "-i", srcVideo, "-vn", 
-					"-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", destAudio };
-	char **argv = (char **)args;
-	int argc = 11;
-	OptionsContext o = { 0 };
-	
-	printArgs( argc, argv );	
-    
-    reset_options(&o, 0);
-
-    av_log_set_flags(AV_LOG_SKIP_REPEATED);
-    parse_loglevel(argc, argv, options);
-
-    avcodec_register_all();
-    avfilter_register_all();
-    av_register_all();
-    avformat_network_init();
-
-    show_banner(argc, argv, options);
-
-    term_init();
-
-    parse_cpuflags(argc, argv, options);
-
-    /* parse options */
-    parse_options(&o, argc, argv, options, opt_output_file);
-
-	if ( transcode() >= 0)  
-		sr = SICKO_RESULT_SUCCESS;
-	
-//	exit_program(0);
-	
-	return sr;
-}
-
-
-int main(int argc, char **argv) {
-
-//TRACE("ffmain\n");
-//ffmain( argc, argv );
-//TRACE("ssmain\n");
-ssmain();
-
-}
-
-int ssmain( void ) {
- 
-	const char *url = "http://www.quirksmode.org/html5/videos/big_buck_bunny.mp4";
-	const char *destVideo = "./sickotmp/test1.mp4";
-	const char *destAudio = "./sickotmp/test1.wav";
-	
-	SickoResult sr;
-	
- TRACE("getting %s\n", url );
- sr = sicko_getURL( url, destVideo );
- sr = 1;
- if ( testResult( sr ) ) {
- 	TRACE( "splitting %s \n", destVideo );
- 	sr = sicko_extractAudio( destVideo, destAudio );
- 	
- 	if ( testResult( sr ) ) {
- 		TRACE( "saved to %s \n", destAudio );
- 	}
- 	else
- 		TRACE( "failed (%d) splitting %s \n", sr, destVideo );
- } 
- else 
- 	TRACE( "failed (%d) getting %s \n", sr, url );
- 	
-	return sr;
-}
-
-//*/
 
